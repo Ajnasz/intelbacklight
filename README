@@ -1,3 +1,7 @@
+Add udev rule:
+ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video $sys$devpath/brightness", RUN+="/bin/chmod g+w $sys$devpath/brightness"
+
+Usage:
 ./intelbacklight -val max
 ./intelbacklight -val min
 ./intelbacklight -val dec
@@ -5,3 +9,5 @@
 
 ./intelbacklight -val dec -change 50
 ./intelbacklight -val inc -change 50
+
+
