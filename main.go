@@ -23,32 +23,6 @@ func getChangeValue(maxValue, change int) int {
 	return (change * maxValue / 100)
 }
 
-func getNewValue(val string, currentValue, change, maxValue, minValue int) (int, error) {
-	var newValue int
-	switch val {
-	case "inc":
-		newValue = currentValue + getChangeValue(maxValue, change)
-	case "dec":
-		newValue = currentValue - getChangeValue(maxValue, change)
-	case "max":
-		newValue = maxValue
-	case "min":
-		newValue = minValue
-	default:
-		return 0, errors.New("invalid operation")
-	}
-
-	if newValue > maxValue {
-		newValue = maxValue
-	}
-
-	if newValue < minValue {
-		newValue = minValue
-	}
-
-	return newValue, nil
-}
-
 const sysDir = "/sys/class/backlight"
 
 func getVideoPath() (string, error) {
@@ -65,15 +39,19 @@ func getVideoPath() (string, error) {
 		return "", errors.New(fmt.Sprintf("no files found in %s", sysDir))
 	}
 
-	sortableFiles := dirEntryByName(files)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Name() < files[j].Name()
+	})
 
-	sort.Sort(sortableFiles)
-	return path.Join(sysDir, sortableFiles[0].Name()), nil
+	return path.Join(sysDir, files[0].Name()), nil
 }
 
 func main() {
-	val := flag.String("val", "", "one of inc, dec, max, min")
-	change := flag.Int("change", 10, "percentage of change")
+	inc := flag.Int("inc", 0, "percentage")
+	dec := flag.Int("dec", 0, "percentage")
+	max := flag.Bool("max", false, "set max brightness")
+	min := flag.Bool("min", false, "set min brightness")
+	get := flag.Bool("get", false, "get current percentage")
 	flag.Parse()
 
 	video, err := getVideoPath()
@@ -98,7 +76,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	newValue, err := getNewValue(*val, currentValue, *change, maxValue, minValue)
+	var newValue int
+	if *get {
+		if currentValue == 0 {
+			fmt.Println(0)
+			return
+		}
+		fmt.Println(maxValue / currentValue * 100)
+		return
+	} else if *max {
+		newValue = maxValue
+	} else if *min {
+		newValue = minValue
+	} else if *inc != 0 {
+		newValue = currentValue + getChangeValue(maxValue, *inc)
+	} else if *dec != 0 {
+		newValue = currentValue - getChangeValue(maxValue, *dec)
+	} else {
+		return
+	}
 
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
