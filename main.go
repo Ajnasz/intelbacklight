@@ -11,15 +11,21 @@ import (
 	"strings"
 )
 
-func getIntValFromFile(fileName string) (int, error) {
+func getNumberFromFile(fileName string) (float64, error) {
 	f, err := os.ReadFile(fileName)
 	if err != nil {
 		return 0, err
 	}
-	return strconv.Atoi(strings.TrimSpace(string(f)))
+	intval, err := strconv.Atoi(strings.TrimSpace(string(f)))
+
+	if err != nil {
+		return 0, err
+	}
+
+	return float64(intval), nil
 }
 
-func getChangeValue(maxValue, change int) int {
+func getChangeValue(maxValue, change float64) float64 {
 	return (change * maxValue / 100)
 }
 
@@ -47,9 +53,9 @@ func getVideoPath() (string, error) {
 }
 
 func main() {
-	inc := flag.Int("inc", 0, "percentage")
-	dec := flag.Int("dec", 0, "percentage")
-	set := flag.Int("set", 0, "percentage")
+	inc := flag.Float64("inc", 0, "percentage")
+	dec := flag.Float64("dec", 0, "percentage")
+	set := flag.Float64("set", 0, "percentage")
 	max := flag.Bool("max", false, "set max brightness")
 	min := flag.Bool("min", false, "set min brightness")
 	get := flag.Bool("get", false, "get current percentage")
@@ -64,26 +70,27 @@ func main() {
 
 	valueFile := path.Join(video, "brightness")
 	maxFile := path.Join(video, "max_brightness")
-	minValue := 1000
-	currentValue, err := getIntValFromFile(valueFile)
+	var minValue float64
+	minValue = 1000
+	currentValue, err := getNumberFromFile(valueFile)
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	maxValue, err := getIntValFromFile(maxFile)
+	maxValue, err := getNumberFromFile(maxFile)
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	var newValue int
+	var newValue float64
 	if *get {
 		if currentValue == 0 {
 			fmt.Println(0)
 			return
 		}
-		fmt.Println(maxValue / currentValue * 100)
+		fmt.Println(fmt.Sprintf("%2.f%%", currentValue/maxValue*100))
 		return
 	} else if *set != 0 {
 		newValue = getChangeValue(maxValue, *set)
@@ -105,7 +112,7 @@ func main() {
 	}
 
 	var mode os.FileMode
-	if err := os.WriteFile(valueFile, []byte(strconv.Itoa(newValue)), mode); err != nil {
+	if err := os.WriteFile(valueFile, []byte(strconv.Itoa(int(newValue))), mode); err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
