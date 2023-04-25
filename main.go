@@ -49,6 +49,7 @@ func getVideoPath() (string, error) {
 func main() {
 	inc := flag.Int("inc", 0, "percentage")
 	dec := flag.Int("dec", 0, "percentage")
+	set := flag.Int("set", 0, "percentage")
 	max := flag.Bool("max", false, "set max brightness")
 	min := flag.Bool("min", false, "set min brightness")
 	get := flag.Bool("get", false, "get current percentage")
@@ -84,6 +85,8 @@ func main() {
 		}
 		fmt.Println(maxValue / currentValue * 100)
 		return
+	} else if *set != 0 {
+		newValue = getChangeValue(maxValue, *set)
 	} else if *max {
 		newValue = maxValue
 	} else if *min {
