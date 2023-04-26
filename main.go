@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 )
+
+const sysDir = "/sys/class/backlight"
 
 func getNumberFromFile(fileName string) (float64, error) {
 	f, err := os.ReadFile(fileName)
@@ -29,45 +30,16 @@ func getChangeValue(maxValue, change float64) float64 {
 	return (change * maxValue / 100)
 }
 
-const sysDir = "/sys/class/backlight"
-
-func getVideoPath() (string, error) {
-	video := os.Getenv("VIDEO_DEVPATH")
-	if video != "" {
-		return video, nil
-	}
-	files, err := os.ReadDir(sysDir)
-	if err != nil {
-		return "", err
-	}
-
-	if len(files) == 0 {
-		return "", errors.New(fmt.Sprintf("no files found in %s", sysDir))
-	}
-
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].Name() < files[j].Name()
-	})
-
-	return path.Join(sysDir, files[0].Name()), nil
+type cmdArgs struct {
+	dec float64
+	inc float64
+	set float64
+	get bool
+	max bool
+	min bool
 }
 
-func main() {
-	inc := flag.Float64("inc", 0, "percentage")
-	dec := flag.Float64("dec", 0, "percentage")
-	set := flag.Float64("set", 0, "percentage")
-	max := flag.Bool("max", false, "set max brightness")
-	min := flag.Bool("min", false, "set min brightness")
-	get := flag.Bool("get", false, "get current percentage")
-	flag.Parse()
-
-	video, err := getVideoPath()
-
-	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
-	}
-
+func handleCommand(video string, args cmdArgs) {
 	valueFile := path.Join(video, "brightness")
 	maxFile := path.Join(video, "max_brightness")
 	var minValue float64
@@ -85,35 +57,91 @@ func main() {
 	}
 
 	var newValue float64
-	if *get {
+	if args.get {
 		if currentValue == 0 {
 			fmt.Println(0)
 			return
 		}
-		fmt.Println(fmt.Sprintf("%2.f%%", currentValue/maxValue*100))
+		fmt.Println(fmt.Sprintf("%s: %2.f%%", video, currentValue/maxValue*100))
 		return
-	} else if *set != 0 {
-		newValue = getChangeValue(maxValue, *set)
-	} else if *max {
+	} else if args.set != 0 {
+		newValue = getChangeValue(maxValue, args.set)
+	} else if args.max {
 		newValue = maxValue
-	} else if *min {
+	} else if args.min {
 		newValue = minValue
-	} else if *inc != 0 {
-		newValue = currentValue + getChangeValue(maxValue, *inc)
-	} else if *dec != 0 {
-		newValue = currentValue - getChangeValue(maxValue, *dec)
+	} else if args.inc != 0 {
+		newValue = currentValue + getChangeValue(maxValue, args.inc)
+	} else if args.dec != 0 {
+		newValue = currentValue - getChangeValue(maxValue, args.dec)
 	} else {
 		return
-	}
-
-	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
 	}
 
 	var mode os.FileMode
 	if err := os.WriteFile(valueFile, []byte(strconv.Itoa(int(newValue))), mode); err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
+	}
+}
+
+func getVideoPaths() ([]string, error) {
+	var out []string
+
+	files, err := os.ReadDir(sysDir)
+	if err != nil {
+		return out, err
+	}
+
+	if len(files) == 0 {
+		return out, errors.New(fmt.Sprintf("no files found in %s", sysDir))
+	}
+
+	for _, file := range files {
+		out = append(out, path.Join(sysDir, file.Name()))
+	}
+	return out, nil
+
+}
+
+func main() {
+	inc := flag.Float64("inc", 0, "percentage")
+	dec := flag.Float64("dec", 0, "percentage")
+	set := flag.Float64("set", 0, "percentage")
+	max := flag.Bool("max", false, "set max brightness")
+	min := flag.Bool("min", false, "set min brightness")
+	get := flag.Bool("get", false, "get current percentage")
+	dev := flag.String("dev", "", fmt.Sprintf("update only the device (listed in %s)", sysDir))
+	list := flag.Bool("list", false, "list devices")
+	flag.Parse()
+
+	files, err := getVideoPaths()
+
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	if *list {
+		for _, f := range files {
+			fmt.Println(f)
+		}
+		return
+	}
+
+	args := cmdArgs{
+		dec: *dec,
+		inc: *inc,
+		set: *set,
+		get: *get,
+		max: *max,
+		min: *min,
+	}
+
+	for _, file := range files {
+		if *dev == "" || strings.HasSuffix(file, "/"+*dev) {
+			handleCommand(file, args)
+			fmt.Println("set", file)
+		}
 	}
 }
