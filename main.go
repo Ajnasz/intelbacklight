@@ -83,6 +83,7 @@ func handleCommand(video string, args cmdArgs) {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
+	fmt.Println(fmt.Sprintf("set %s to %d", video, int(newValue)))
 }
 
 func getVideoPaths() ([]string, error) {
@@ -141,7 +142,6 @@ func main() {
 	for _, file := range files {
 		if *dev == "" || strings.HasSuffix(file, "/"+*dev) {
 			handleCommand(file, args)
-			fmt.Println("set", file)
 		}
 	}
 }
