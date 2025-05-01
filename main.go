@@ -63,7 +63,7 @@ func handleCommand(video string, args cmdArgs) {
 			fmt.Println(0)
 			return
 		}
-		fmt.Println(fmt.Sprintf("%s: %2.f%%", video, currentValue/maxValue*100))
+		fmt.Println(fmt.Sprintf("%s: %1.2f%%", video, currentValue/maxValue*100))
 		return
 	} else if args.set != 0 {
 		newValue = math.Min(math.Max(getChangeValue(maxValue, args.set), minValue), maxValue)
