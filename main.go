@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"strconv"
@@ -65,15 +66,15 @@ func handleCommand(video string, args cmdArgs) {
 		fmt.Println(fmt.Sprintf("%s: %2.f%%", video, currentValue/maxValue*100))
 		return
 	} else if args.set != 0 {
-		newValue = getChangeValue(maxValue, args.set)
+		newValue = math.Min(math.Max(getChangeValue(maxValue, args.set), minValue), maxValue)
 	} else if args.max {
 		newValue = maxValue
 	} else if args.min {
 		newValue = minValue
 	} else if args.inc != 0 {
-		newValue = currentValue + getChangeValue(maxValue, args.inc)
+		newValue = math.Min(currentValue+getChangeValue(maxValue, args.inc), maxValue)
 	} else if args.dec != 0 {
-		newValue = currentValue - getChangeValue(maxValue, args.dec)
+		newValue = math.Max(currentValue-getChangeValue(maxValue, args.dec), minValue)
 	} else {
 		return
 	}
