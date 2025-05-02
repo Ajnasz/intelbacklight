@@ -66,20 +66,21 @@ func handleCommand(video string, args cmdArgs) {
 		fmt.Println(fmt.Sprintf("%s: %1.2f%%", video, currentValue/maxValue*100))
 		return
 	} else if args.set != 0 {
-		newValue = math.Min(math.Max(getChangeValue(maxValue, args.set), minValue), maxValue)
+		newValue = getChangeValue(maxValue, args.set)
 	} else if args.max {
 		newValue = maxValue
 	} else if args.min {
 		newValue = minValue
 	} else if args.inc != 0 {
-		newValue = math.Min(currentValue+getChangeValue(maxValue, args.inc), maxValue)
+		newValue = currentValue + getChangeValue(maxValue, args.inc)
 	} else if args.dec != 0 {
-		newValue = math.Max(currentValue-getChangeValue(maxValue, args.dec), minValue)
+		newValue = currentValue - getChangeValue(maxValue, args.dec)
 	} else {
 		return
 	}
 
 	var mode os.FileMode
+	newValue = math.Max(minValue, math.Min(math.Round(newValue), maxValue))
 	if err := os.WriteFile(valueFile, []byte(strconv.Itoa(int(newValue))), mode); err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
