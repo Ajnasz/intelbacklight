@@ -11,7 +11,18 @@ import (
 	"strings"
 )
 
+var errNoAction = errors.New("no action specified")
+
 const sysDir = "/sys/class/backlight"
+
+type cmdArgs struct {
+	dec float64
+	inc float64
+	set float64
+	get bool
+	max bool
+	min bool
+}
 
 func getNumberFromFile(fileName string) (float64, error) {
 	f, err := os.ReadFile(fileName)
@@ -31,61 +42,93 @@ func getChangeValue(maxValue, change float64) float64 {
 	return (change * maxValue / 100)
 }
 
-type cmdArgs struct {
-	dec float64
-	inc float64
-	set float64
-	get bool
-	max bool
-	min bool
+func getValueFile(video string) string {
+	return path.Join(video, "brightness")
 }
 
-func handleCommand(video string, args cmdArgs) {
-	valueFile := path.Join(video, "brightness")
-	maxFile := path.Join(video, "max_brightness")
-	var minValue float64
-	minValue = 1000
+func getCurrentValue(video string) (float64, error) {
+	valueFile := getValueFile(video)
 	currentValue, err := getNumberFromFile(valueFile)
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
+		return 0, err
 	}
 
-	maxValue, err := getNumberFromFile(maxFile)
+	return currentValue, nil
+}
+
+func getMaxValue(video string) (float64, error) {
+	maxValueFile := path.Join(video, "max_brightness")
+	maxValue, err := getNumberFromFile(maxValueFile)
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
+		return 0, err
 	}
 
+	return maxValue, nil
+}
+
+func calcNewValue(video string, args cmdArgs, maxValue float64) (float64, error) {
+	const minValue float64 = 1000
 	var newValue float64
-	if args.get {
-		if currentValue == 0 {
-			fmt.Println(0)
-			return
-		}
-		fmt.Println(fmt.Sprintf("%s: %1.2f%%", video, currentValue/maxValue*100))
-		return
-	} else if args.set != 0 {
+	if args.set != 0 {
 		newValue = getChangeValue(maxValue, args.set)
 	} else if args.max {
 		newValue = maxValue
 	} else if args.min {
 		newValue = minValue
 	} else if args.inc != 0 {
+		currentValue, err := getCurrentValue(video)
+		if err != nil {
+			return 0, err
+		}
 		newValue = currentValue + getChangeValue(maxValue, args.inc)
 	} else if args.dec != 0 {
+		currentValue, err := getCurrentValue(video)
+		if err != nil {
+			return 0, err
+		}
 		newValue = currentValue - getChangeValue(maxValue, args.dec)
 	} else {
-		return
+		return 0, errNoAction
 	}
 
-	var mode os.FileMode
-	newValue = math.Max(minValue, math.Min(math.Round(newValue), maxValue))
-	if err := os.WriteFile(valueFile, []byte(strconv.Itoa(int(newValue))), mode); err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
+	return math.Max(minValue, math.Min(maxValue, math.Round(newValue))), nil
+}
+
+func handleCommand(video string, args cmdArgs) (string, error) {
+	const minValue float64 = 1000
+
+	maxValue, err := getMaxValue(video)
+	if err != nil {
+		return "", err
 	}
-	fmt.Println(fmt.Sprintf("set %s to %d", video, int(newValue)))
+
+	if args.get {
+		currentValue, err := getCurrentValue(video)
+		if err != nil {
+			return "", err
+		}
+		if currentValue == 0 {
+			fmt.Println(0)
+			return "", nil
+		}
+		return fmt.Sprintf("%s: %1.2f%%", video, currentValue/maxValue*100), nil
+	} else {
+		newValue, err := calcNewValue(video, args, maxValue)
+		if err != nil {
+			if errors.Is(err, errNoAction) {
+				return "", nil
+			}
+			return "", err
+		}
+
+		var mode os.FileMode
+		newValue = math.Max(minValue, math.Min(maxValue, math.Round(newValue)))
+		if err := os.WriteFile(getValueFile(video), []byte(strconv.Itoa(int(newValue))), mode); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("set %s to %d", video, int(newValue)), nil
+	}
+
 }
 
 func getVideoPaths() ([]string, error) {
@@ -143,7 +186,15 @@ func main() {
 
 	for _, file := range files {
 		if *dev == "" || strings.HasSuffix(file, "/"+*dev) {
-			handleCommand(file, args)
+			output, err := handleCommand(file, args)
+			if err != nil {
+				fmt.Fprint(os.Stderr, err)
+				os.Exit(1)
+			}
+
+			if output != "" {
+				fmt.Println(output)
+			}
 		}
 	}
 }
