@@ -94,9 +94,13 @@ func calcNewValue(video string, args cmdArgs, maxValue float64) (float64, error)
 	return math.Max(minValue, math.Min(maxValue, math.Round(newValue))), nil
 }
 
+func setNewValue(video string, newValue float64) error {
+	var mode os.FileMode
+	return os.WriteFile(getValueFile(video), []byte(strconv.Itoa(int(newValue))), mode)
+}
+
 func handleCommand(video string, args cmdArgs) (string, error) {
 	const minValue float64 = 1000
-
 	maxValue, err := getMaxValue(video)
 	if err != nil {
 		return "", err
@@ -121,11 +125,9 @@ func handleCommand(video string, args cmdArgs) (string, error) {
 			return "", err
 		}
 
-		var mode os.FileMode
 		newValue = math.Max(minValue, math.Min(maxValue, math.Round(newValue)))
-		if err := os.WriteFile(getValueFile(video), []byte(strconv.Itoa(int(newValue))), mode); err != nil {
-			return "", err
-		}
+		setNewValue(video, newValue)
+
 		return fmt.Sprintf("set %s to %d", video, int(newValue)), nil
 	}
 
