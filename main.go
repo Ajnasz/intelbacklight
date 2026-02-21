@@ -31,11 +31,7 @@ func getNumberFromFile(fileName string) (float64, error) {
 	}
 	intval, err := strconv.Atoi(strings.TrimSpace(string(f)))
 
-	if err != nil {
-		return 0, err
-	}
-
-	return float64(intval), nil
+	return float64(intval), err
 }
 
 func getChangeValue(maxValue, change float64) float64 {
@@ -67,14 +63,16 @@ func getMaxValue(video string) (float64, error) {
 }
 
 func calcNewValue(video string, args cmdArgs, maxValue float64) (float64, error) {
-	const minValue float64 = 1000
+	const minBrightness = 1000
+
 	var newValue float64
+
 	if args.set != 0 {
 		newValue = getChangeValue(maxValue, args.set)
 	} else if args.max {
 		newValue = maxValue
 	} else if args.min {
-		newValue = minValue
+		newValue = minBrightness
 	} else if args.inc != 0 {
 		currentValue, err := getCurrentValue(video)
 		if err != nil {
@@ -91,7 +89,7 @@ func calcNewValue(video string, args cmdArgs, maxValue float64) (float64, error)
 		return 0, errNoAction
 	}
 
-	return math.Max(minValue, math.Min(maxValue, math.Round(newValue))), nil
+	return math.Max(minBrightness, math.Min(maxValue, math.Round(newValue))), nil
 }
 
 func setNewValue(video string, newValue float64) error {
@@ -100,7 +98,6 @@ func setNewValue(video string, newValue float64) error {
 }
 
 func handleCommand(video string, args cmdArgs) (string, error) {
-	const minValue float64 = 1000
 	maxValue, err := getMaxValue(video)
 	if err != nil {
 		return "", err
@@ -111,26 +108,22 @@ func handleCommand(video string, args cmdArgs) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if currentValue == 0 {
-			fmt.Println(0)
-			return "", nil
-		}
 		return fmt.Sprintf("%s: %1.2f%%", video, currentValue/maxValue*100), nil
-	} else {
-		newValue, err := calcNewValue(video, args, maxValue)
-		if err != nil {
-			if errors.Is(err, errNoAction) {
-				return "", nil
-			}
-			return "", err
-		}
-
-		newValue = math.Max(minValue, math.Min(maxValue, math.Round(newValue)))
-		setNewValue(video, newValue)
-
-		return fmt.Sprintf("set %s to %d", video, int(newValue)), nil
 	}
 
+	newValue, err := calcNewValue(video, args, maxValue)
+	if err != nil {
+		if errors.Is(err, errNoAction) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	if err := setNewValue(video, newValue); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("set %s to %d", video, int(newValue)), nil
 }
 
 func getVideoPaths() ([]string, error) {
@@ -142,7 +135,7 @@ func getVideoPaths() ([]string, error) {
 	}
 
 	if len(files) == 0 {
-		return out, errors.New(fmt.Sprintf("no files found in %s", sysDir))
+		return out, fmt.Errorf("no files found in %s", sysDir)
 	}
 
 	for _, file := range files {
@@ -150,6 +143,22 @@ func getVideoPaths() ([]string, error) {
 	}
 	return out, nil
 
+}
+
+func processDevices(dev string, files []string, args cmdArgs) {
+	for _, file := range files {
+		if dev == "" || strings.HasSuffix(file, "/"+dev) {
+			output, err := handleCommand(file, args)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+
+			if output != "" {
+				fmt.Println(output)
+			}
+		}
+	}
 }
 
 func main() {
@@ -166,7 +175,7 @@ func main() {
 	files, err := getVideoPaths()
 
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -186,17 +195,5 @@ func main() {
 		min: *min,
 	}
 
-	for _, file := range files {
-		if *dev == "" || strings.HasSuffix(file, "/"+*dev) {
-			output, err := handleCommand(file, args)
-			if err != nil {
-				fmt.Fprint(os.Stderr, err)
-				os.Exit(1)
-			}
-
-			if output != "" {
-				fmt.Println(output)
-			}
-		}
-	}
+	processDevices(*dev, files, args)
 }
